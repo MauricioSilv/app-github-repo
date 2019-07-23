@@ -24,32 +24,64 @@ export default class User extends Component {
 
   static propTypes = {
     navigation: PropTypes.shape({
+      navigate: PropTypes.func,
       getParam: PropTypes.func,
     }).isRequired,
   };
 
   state = {
     stars: [],
-    loading: false,
+    loading: true,
+    page: 1,
   };
 
   async componentDidMount() {
+    this.loadStars();
+  }
+
+  loadStars = async (page = 1) => {
+    const { stars } = this.state;
     const { navigation } = this.props;
     const user = navigation.getParam('user');
 
-    this.setState({ loading: true });
-
-    const response = await api.get(`/users/${user.login}/starred`);
+    /**
+     * substitui ?page=1 / params: { page }
+     */
+    const response = await api.get(`/users/${user.login}/starred`, {
+      params: { page },
+    });
 
     this.setState({
-      stars: response.data,
+      stars: page >= 2 ? [...stars, ...response.data] : response.data,
+      page,
       loading: false,
+      refreshing: false,
     });
-  }
+  };
+
+  loadMore = () => {
+    const { page } = this.state;
+
+    const nexPage = page + 1;
+
+    this.loadStars(nexPage);
+  };
+
+  refreshingList = () => {
+    this.setState({ refreshing: true });
+
+    this.loadStars();
+  };
+
+  handleRepository = repository => {
+    const { navigation } = this.props;
+
+    navigation.navigate('Repository', { repository });
+  };
 
   render() {
     const { navigation } = this.props;
-    const { stars, loading } = this.state;
+    const { stars, loading, refreshing } = this.state;
     const user = navigation.getParam('user');
 
     return (
@@ -63,10 +95,14 @@ export default class User extends Component {
           <ActivityIndicator size="large" color="#7159c1" />
         ) : (
           <Stars
+            onEndReachedThreshold={0.2}
+            onEndReached={this.loadMore}
+            onRefresh={this.refreshingList}
+            refreshing={refreshing}
             data={stars}
             keyExtractor={star => String(star.id)}
             renderItem={({ item }) => (
-              <Starred>
+              <Starred onPress={() => this.handleRepository(item)}>
                 <OwnerAvatar source={{ uri: item.owner.avatar_url }} />
                 <Info>
                   <Title>{item.name}</Title>
